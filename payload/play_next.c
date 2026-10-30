@@ -35,6 +35,16 @@ static struct osos_media_entry *insert_song(struct osos_player *player,
     return inserted;
 }
 
+void cfw_play_order_refresh(struct osos_player *player)
+{
+    if (!osos_playback_list_valid(&player->playback))
+        return;
+    struct osos_media_list *list = player->playback.list;
+    /* The native mode-2 lookup does not rebuild after an edit; rebuild it from the ranks. */
+    if (osos_list_is_shuffled(list))
+        osos_list_order_entry(list, 2, 0, 0);
+}
+
 /* Caller holds the player lock. Rebinding the source invalidates cached track order. */
 static void invalidate_next(struct osos_player *player)
 {
@@ -82,6 +92,8 @@ void cfw_play_next_menu(struct osos_context_menu *menu)
 void cfw_play_next_add(struct osos_player *player, struct osos_media_item *selected,
                        int last)
 {
+    /* A previous edit may have left the shuffle index invalid. */
+    cfw_play_order_refresh(player);
     struct osos_media_entry *current = current_entry(player);
     if (current) {
         if (selected && osos_media_item_is_music(selected)) {
@@ -123,10 +135,9 @@ void cfw_play_next_add_browser(struct osos_player *player, void *browser, int la
         struct osos_media_list *queue = player->playback.list;
         if (osos_list_root(queue)->tracks >= UINT16_MAX - 1)
             break;
-        /* Each insertion invalidates the shuffle index; rebuild it from the ranks and
-           revalidate before insert_song walks it again. */
-        if (osos_list_is_shuffled(queue))
-            osos_list_order_entry(queue, 2, 0, 0);
+        /* Each insertion invalidates the shuffle index; rebuild it before insert_song
+           walks it again. */
+        cfw_play_order_refresh(player);
         current = current_entry(player);
         if (!current)
             break;

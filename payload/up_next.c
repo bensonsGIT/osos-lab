@@ -62,6 +62,8 @@ static unsigned upcoming(struct osos_player *player)
     struct osos_media_list *list = player->playback.list;
     if (osos_list_root(list)->groups)
         return 0;
+    /* Every play-order lookup follows; an earlier edit may have invalidated it. */
+    cfw_play_order_refresh(player);
     unsigned count = osos_list_root(list)->tracks;
     unsigned next = (unsigned)player->current_index + 1;
     return next < count ? count - next : 0;
@@ -185,6 +187,8 @@ static void unlink_entry(struct osos_media_list *list, struct osos_media_entry *
 /* Collects before unlinking so one order rebuild serves the whole batch. */
 static unsigned unlink_batch(struct osos_player *player, uint32_t index, unsigned count)
 {
+    /* The previous batch invalidated the order this lookup needs. */
+    cfw_play_order_refresh(player);
     struct osos_media_list *list = player->playback.list;
     struct osos_media_entry *root = osos_list_root(list);
     struct osos_media_entry *current =
@@ -203,6 +207,7 @@ static unsigned unlink_batch(struct osos_player *player, uint32_t index, unsigne
     for (unsigned i = 0; i < n && root->tracks > 1; i++)
         unlink_entry(list, batch[i]);
     osos_media_list_invalidate_all_orders(list);
+    cfw_play_order_refresh(player);
     return n;
 }
 
@@ -291,8 +296,10 @@ static unsigned move_upcoming(struct osos_player *player, uint32_t index, unsign
         /* Play order is not link order here; leave the list untouched. */
         moved = 0;
     }
-    if (moved)
+    if (moved) {
         osos_media_list_invalidate_all_orders(list);
+        cfw_play_order_refresh(player);
+    }
     osos_database_end_update(osos_list_database(list));
     osos_player_rebuild_artwork(player);
     if (moved) {
@@ -331,6 +338,7 @@ static unsigned bring_next(struct osos_player *player, uint32_t index, unsigned 
     osos_database_begin_update(osos_list_database(list));
     unlink_entry(list, entry);
     osos_media_list_invalidate_all_orders(list);
+    cfw_play_order_refresh(player);
     osos_database_end_update(osos_list_database(list));
     osos_player_rebuild_artwork(player);
     osos_player_clear_prepared(player);

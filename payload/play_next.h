@@ -3,6 +3,9 @@
 #define CFW_PLAY_NEXT_H
 #include "osos.h"
 
+/* Caller holds the player lock. Edits invalidate the play-order caches, and play-order
+   lookups return NULL until the shuffle index is rebuilt. */
+void cfw_play_order_refresh(struct osos_player *player);
 int cfw_play_next_available(void);
 void cfw_play_next_menu(struct osos_context_menu *menu);
 /* Caller holds the player lock while resolving the item and inserting it. */
