@@ -399,6 +399,13 @@ static inline int osos_player_rebuild_artwork(struct osos_player *player)
     return ((fn)OSOS_PLAYER_REBUILD_ARTWORK)(player);
 }
 
+/* Takes the player lock itself; returns false when nothing could be played. */
+static inline int osos_player_advance_track(struct osos_player *player, uint32_t flags)
+{
+    typedef int (*fn)(struct osos_player *, uint32_t);
+    return ((fn)OSOS_PLAYER_ADVANCE_TRACK)(player, flags);
+}
+
 static inline void osos_audio_set_playback_source(void *source)
 {
     typedef void (*fn)(void *);

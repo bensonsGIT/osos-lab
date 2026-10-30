@@ -3,6 +3,7 @@
 #include "up_next.h"
 
 #include "cfw.h"
+#include "play_next.h"
 #include "queue_song_ui.h"
 #include "up_next_ui.h"
 
@@ -104,8 +105,8 @@ static const char *row_text(uint32_t index)
     return line.data;
 }
 
-static const char *const song_actions[] = {"Move Up", "Move Down", "Remove"};
-enum { MOVE_UP, MOVE_DOWN, REMOVE, SONG_ACTIONS };
+static const char *const song_actions[] = {"Play Now", "Move Up", "Move Down", "Remove"};
+enum { PLAY_NOW, MOVE_UP, MOVE_DOWN, REMOVE, SONG_ACTIONS };
 
 /* Upcoming-song index of the Queue row that opened the song actions. */
 static uint32_t selected;
@@ -300,6 +301,42 @@ static unsigned move_upcoming(struct osos_player *player, uint32_t index, unsign
     return moved;
 }
 
+/* Caller holds the player lock. Makes an upcoming song the next one to play;
+   the songs it passes keep their order after it. */
+static unsigned bring_next(struct osos_player *player, uint32_t index, unsigned unused)
+{
+    (void)unused;
+    if (index >= upcoming(player))
+        return 0;
+    if (index == 0)
+        return 1;
+    struct osos_media_list *list = player->playback.list;
+    struct osos_media_entry *root = osos_list_root(list);
+    struct osos_media_entry *entry =
+        osos_playback_entry(&player->playback, player->current_index + 1 + index);
+    if (!entry || entry->parent != root || !entry->song.record)
+        return 0;
+    struct osos_media_item item;
+    osos_media_item_init_record(&item, entry->song.record);
+    if (!osos_media_item_valid(&item))
+        return 0;
+
+    /* Reuse Play Next's insertion, then drop the original by pointer. */
+    unsigned tracks = root->tracks;
+    cfw_play_next_add(player, &item, 0);
+    if (root->tracks != tracks + 1 || entry->parent != root)
+        return 0;
+    osos_player_stop_artwork(player);
+    osos_database_begin_update(osos_list_database(list));
+    unlink_entry(list, entry);
+    osos_media_list_invalidate_all_orders(list);
+    osos_database_end_update(osos_list_database(list));
+    osos_player_rebuild_artwork(player);
+    osos_player_clear_prepared(player);
+    osos_audio_set_playback_source(player->playback_source);
+    return 1;
+}
+
 static unsigned edit(unsigned (*change)(struct osos_player *, uint32_t, unsigned),
                      uint32_t index, unsigned argument)
 {
@@ -337,7 +374,11 @@ int cfw_up_next_action(const char *action, uint32_t argument)
     uint32_t index = osos_selection_index(osos_ui_selection());
     if (select)
         selected = index;
-    else if (index == REMOVE)
+    else if (index == PLAY_NOW) {
+        /* Advance outside the player lock; the native call takes it itself. */
+        if (edit(bring_next, selected, 0))
+            osos_player_advance_track(osos_player_get(), 0);
+    } else if (index == REMOVE)
         edit(remove_upcoming, selected, 1);
     else if (index < SONG_ACTIONS)
         edit(move_upcoming, selected, index == MOVE_UP);
