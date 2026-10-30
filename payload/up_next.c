@@ -158,32 +158,88 @@ static void unlink_entry(struct osos_media_list *list, struct osos_media_entry *
     entry->song.next_record_entry = NULL;
 }
 
-/* Caller holds the player lock. Only songs after the current one can be removed. */
-static int remove_upcoming(struct osos_player *player, uint32_t index)
+#define BATCH 64
+
+/* Collects before unlinking so one order rebuild serves the whole batch. */
+static unsigned unlink_batch(struct osos_player *player, uint32_t index, unsigned count)
 {
-    if (index >= upcoming(player))
-        return 0;
     struct osos_media_list *list = player->playback.list;
     struct osos_media_entry *root = osos_list_root(list);
     struct osos_media_entry *current =
         osos_playback_entry(&player->playback, player->current_index);
-    struct osos_media_entry *entry =
-        osos_playback_entry(&player->playback, player->current_index + 1 + index);
-    if (!current || !entry || entry == current || entry->parent != root ||
-        !entry->song.record || root->tracks < 2)
+    struct osos_media_entry *batch[BATCH];
+    unsigned n = 0;
+    if (!current)
         return 0;
+    while (n < count && n < BATCH) {
+        struct osos_media_entry *entry = osos_playback_entry(
+            &player->playback, player->current_index + 1 + index + n);
+        if (!entry || entry == current || entry->parent != root || !entry->song.record)
+            break;
+        batch[n++] = entry;
+    }
+    for (unsigned i = 0; i < n && root->tracks > 1; i++)
+        unlink_entry(list, batch[i]);
+    osos_media_list_invalidate_all_orders(list);
+    return n;
+}
+
+/* Caller holds the player lock. Only songs after the current one can be removed. */
+static unsigned remove_upcoming(struct osos_player *player, uint32_t index,
+                                unsigned count)
+{
+    unsigned available = upcoming(player);
+    if (index >= available)
+        return 0;
+    if (count > available - index)
+        count = available - index;
+    struct osos_media_list *list = player->playback.list;
 
     /* Artwork is indexed by queue position; stop its worker before mutation. */
     osos_player_stop_artwork(player);
     osos_database_begin_update(osos_list_database(list));
-    unlink_entry(list, entry);
-    osos_media_list_invalidate_all_orders(list);
+    unsigned removed = 0;
+    while (removed < count) {
+        /* Later songs shift down into index after each batch. */
+        unsigned n = unlink_batch(player, index, count - removed);
+        if (!n)
+            break;
+        removed += n;
+    }
     osos_database_end_update(osos_list_database(list));
     osos_player_rebuild_artwork(player);
-    /* The removed song may already be prepared as the next track. */
-    osos_player_clear_prepared(player);
-    osos_audio_set_playback_source(player->playback_source);
-    return 1;
+    if (removed) {
+        /* A removed song may already be prepared as the next track. */
+        osos_player_clear_prepared(player);
+        osos_audio_set_playback_source(player->playback_source);
+    }
+    return removed;
+}
+
+static unsigned edit(uint32_t index, unsigned count)
+{
+    struct osos_player *player = osos_player_get();
+    osos_player_lock(player);
+    unsigned removed = remove_upcoming(player, index, count);
+    osos_player_unlock(player);
+    void *model = osos_ui_service_get(0x8900);
+    if (removed && model)
+        osos_model_notify(model, OSOS_NOTIFY_ALL, CFW_UpNext_Property);
+    return removed;
+}
+
+int cfw_up_next_has_songs(void)
+{
+    struct osos_player *player = osos_player_get();
+    osos_player_lock(player);
+    int any = upcoming(player) != 0;
+    osos_player_unlock(player);
+    return any;
+}
+
+void cfw_up_next_clear(void)
+{
+    edit(0, UINT32_MAX);
 }
 
 int cfw_up_next_action(const char *action, uint32_t argument)
@@ -191,14 +247,7 @@ int cfw_up_next_action(const char *action, uint32_t argument)
     if (!cfw_string_equal(action, "CFW_UpNextRemove"))
         return 0;
     if (argument != OSOS_ACTION_SUPPORT_QUERY) {
-        uint32_t index = osos_selection_index(osos_ui_selection());
-        struct osos_player *player = osos_player_get();
-        osos_player_lock(player);
-        int removed = remove_upcoming(player, index);
-        osos_player_unlock(player);
-        void *model = osos_ui_service_get(0x8900);
-        if (removed && model)
-            osos_model_notify(model, OSOS_NOTIFY_ALL, CFW_UpNext_Property);
+        edit(osos_selection_index(osos_ui_selection()), 1);
     }
     return 1;
 }

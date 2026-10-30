@@ -108,6 +108,8 @@ PATCH_ARM void cfw_now_playing_menu_cancel(struct osos_context_menu *menu,
                                            uint32_t flags)
 {
     osos_context_menu_append(menu, CFW_UP_NEXT_LABEL, "CFW_UpNext", 1);
+    if (cfw_up_next_has_songs())
+        osos_context_menu_append(menu, CFW_CLEAR_QUEUE_LABEL, "CFW_ClearQueue", 1);
     osos_context_menu_append(menu, CFW_SONG_INFO_LABEL, "CFW_SongInfo", 1);
     osos_context_menu_append(menu, label, action, flags);
 }
@@ -118,6 +120,11 @@ PATCH_ARM int cfw_now_playing_action(void *controller, const char *action,
     if (cfw_string_equal(action, "CFW_UpNext")) {
         if (argument != OSOS_ACTION_SUPPORT_QUERY)
             cfw_up_next_show(controller);
+        return 1;
+    }
+    if (cfw_string_equal(action, "CFW_ClearQueue")) {
+        if (argument != OSOS_ACTION_SUPPORT_QUERY)
+            cfw_up_next_clear();
         return 1;
     }
     if (song_action(controller, NOW_PLAYING, action, argument))
