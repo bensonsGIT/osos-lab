@@ -538,7 +538,7 @@ class UiTests(unittest.TestCase):
             for _, row in blocks(data)
         ]
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0][0x94], 1)
+        self.assertEqual(bytes(rows[0][0x94:0x95]), b"\x01")
         header = emit_header(document, compiled.string_ids)
         self.assertIn("#define CFW_UpNext_Property ", header)
 
