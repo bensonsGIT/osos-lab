@@ -1,28 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <ui>
   <!-- Read-only view of the songs after the current one in the Now Playing list. -->
-  <menu id="CFW_UpNext" title="Up Next">
-    <info id="CFW_UP_NEXT_1" title="1"/>
-    <info id="CFW_UP_NEXT_2" title="2"/>
-    <info id="CFW_UP_NEXT_3" title="3"/>
-    <info id="CFW_UP_NEXT_4" title="4"/>
-    <info id="CFW_UP_NEXT_5" title="5"/>
-    <info id="CFW_UP_NEXT_6" title="6"/>
-    <info id="CFW_UP_NEXT_7" title="7"/>
-    <info id="CFW_UP_NEXT_8" title="8"/>
-    <info id="CFW_UP_NEXT_9" title="9"/>
-    <info id="CFW_UP_NEXT_10" title="10"/>
-    <info id="CFW_UP_NEXT_11" title="11"/>
-    <info id="CFW_UP_NEXT_12" title="12"/>
-    <info id="CFW_UP_NEXT_13" title="13"/>
-    <info id="CFW_UP_NEXT_14" title="14"/>
-    <info id="CFW_UP_NEXT_15" title="15"/>
-    <info id="CFW_UP_NEXT_16" title="16"/>
-    <info id="CFW_UP_NEXT_17" title="17"/>
-    <info id="CFW_UP_NEXT_18" title="18"/>
-    <info id="CFW_UP_NEXT_19" title="19"/>
-    <info id="CFW_UP_NEXT_20" title="20"/>
-  </menu>
+  <list id="CFW_UpNext" title="Up Next"/>
   <string id="CFW_UP_NEXT_LABEL" text="Up Next"/>
   <screen-event screen="NowPlaying_Screen" event="contextualMenu.CFW_UpNext" handler="CFW_UpNext"/>
 </ui>

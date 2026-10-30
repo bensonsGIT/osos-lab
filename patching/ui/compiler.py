@@ -223,6 +223,18 @@ class DocumentCompiler:
         )
         return parent_row, self.push(parent_item, item.name)
 
+    def list_page(self, item):
+        """Page with one dynamic row; payload code answers its VMax and indexed Str."""
+        resources = self.resources
+        property_id = resources.allocate(item.name + "_Property")
+        kind, prototype = blocks(resources.stock("ITEM", "Settings_EQ_Items"))[0]
+        row = Resource(prototype)
+        put(row, 0x30, resources.allocate())
+        put(row, 0x68, resources.property_source(0x8900, property_id))
+        row[0x94:0x95] = b"\x01"
+        self.page(item.name, item.title, [(kind, row)], [])
+        self.string_ids[item.name + "_Property"] = property_id
+
     def range_page(self, item, property_id):
         resources = self.resources
         template_name = "CFW_Range_Template"
@@ -461,6 +473,11 @@ def compile_document(resources, document, text=""):
         builder = DocumentCompiler(resources, document)
         if document.root.kind == "menu":
             builder.menu(document.root)
+            for suffix in ("_Screen", "_Layout"):
+                name = document.root.name + suffix
+                compiled.string_ids[name] = resources.names[name]
+        if document.root.kind == "list":
+            builder.list_page(document.root)
             for suffix in ("_Screen", "_Layout"):
                 name = document.root.name + suffix
                 compiled.string_ids[name] = resources.names[name]

@@ -6,5 +6,8 @@
 #include "osos.h"
 
 void cfw_up_next_show(void *controller);
+int cfw_up_next_property(uint32_t type, uint32_t property, uintptr_t *out);
+int cfw_up_next_indexed_property(uint32_t type, uint32_t property, uint32_t index,
+                                 uintptr_t *out);
 
 #endif

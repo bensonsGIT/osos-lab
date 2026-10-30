@@ -521,6 +521,27 @@ class UiTests(unittest.TestCase):
         self.assertIn("#define CFW_SongInfo_Screen ", header)
         self.assertIn("#define CFW_SongInfo_Layout ", header)
 
+    def test_up_next_list_is_one_dynamic_row_without_chosen_actions(self):
+        root = Path(__file__).resolve().parents[2]
+        metadata = json.loads((root / "firmware/ui.json").read_text())
+        shim = root / "payload/native"
+        bindings = json.loads((shim / "ui.json").read_text())["bindings"]
+        resources = Resources(metadata["resources"], bindings)
+        document = parser.read(root / "payload/up_next.ui")
+        compiled = compile_document(resources, document)
+        screen = compiled.string_ids["CFW_UpNext_Screen"]
+        self.assertEqual(word(resources.added["CEVT", screen], 0), 0)
+        rows = [
+            row
+            for (kind, _), data in resources.added.items()
+            if kind == "ITEM"
+            for _, row in blocks(data)
+        ]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0x94], 1)
+        header = emit_header(document, compiled.string_ids)
+        self.assertIn("#define CFW_UpNext_Property ", header)
+
     def test_named_screen_uses_selected_binding_and_rejects_missing_names(self):
         document = parser.parse(
             '<ui><screen-event screen="Songs" event="select" handler="Select"/></ui>'

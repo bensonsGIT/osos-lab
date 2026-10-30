@@ -4,15 +4,7 @@
 
 #include "up_next_ui.h"
 
-/* Generated row ids are allocated sequentially but are not guaranteed contiguous. */
-static const uint32_t rows[] = {
-    CFW_UP_NEXT_1,  CFW_UP_NEXT_2,  CFW_UP_NEXT_3,  CFW_UP_NEXT_4,  CFW_UP_NEXT_5,
-    CFW_UP_NEXT_6,  CFW_UP_NEXT_7,  CFW_UP_NEXT_8,  CFW_UP_NEXT_9,  CFW_UP_NEXT_10,
-    CFW_UP_NEXT_11, CFW_UP_NEXT_12, CFW_UP_NEXT_13, CFW_UP_NEXT_14, CFW_UP_NEXT_15,
-    CFW_UP_NEXT_16, CFW_UP_NEXT_17, CFW_UP_NEXT_18, CFW_UP_NEXT_19, CFW_UP_NEXT_20,
-};
-#define ROWS (sizeof(rows) / sizeof(*rows))
-
+/* Rows are rendered on demand, so one line is formatted at a time. */
 static struct {
     char data[256];
     unsigned size;
@@ -59,16 +51,8 @@ static void text_field(struct osos_media_item *item, enum osos_media_text field)
     osos_native_string_destroy(&string);
 }
 
-static void set_row(unsigned row)
-{
-    osos_resource_set(osos_resource_bank(), 0x53747220, rows[row], line.data,
-                      line.size + 1);
-    line.size = 0;
-    line.data[0] = 0;
-}
-
-/* Caller holds the player lock. Returns the number of rows filled with songs. */
-static unsigned fill_rows(struct osos_player *player)
+/* Caller holds the player lock. Songs after the current one, in play order. */
+static unsigned upcoming(struct osos_player *player)
 {
     if (!player->current || !osos_playback_list_valid(&player->playback))
         return 0;
@@ -76,44 +60,77 @@ static unsigned fill_rows(struct osos_player *player)
     if (osos_list_root(list)->groups)
         return 0;
     unsigned count = osos_list_root(list)->tracks;
-    unsigned filled = 0;
-    /* Playback indexes are in play order, so shuffle and Play Next are reflected. */
-    for (unsigned index = (unsigned)player->current_index + 1;
-         index < count && filled < ROWS; index++) {
-        struct osos_media_entry *entry = osos_playback_entry(&player->playback, index);
-        if (!entry || !entry->song.record)
-            continue;
-        struct osos_media_item item;
-        osos_media_item_init_record(&item, entry->song.record);
-        if (!osos_media_item_valid(&item))
-            continue;
-        decimal(filled + 1);
-        append(". ");
-        text_field(&item, OSOS_MEDIA_TITLE);
-        append(" - ");
-        text_field(&item, OSOS_MEDIA_ARTIST);
-        set_row(filled++);
-    }
-    return filled;
+    unsigned next = (unsigned)player->current_index + 1;
+    return next < count ? count - next : 0;
 }
 
-void cfw_up_next_show(void *controller)
+static unsigned row_count(void)
+{
+    struct osos_player *player = osos_player_get();
+    osos_player_lock(player);
+    unsigned count = upcoming(player);
+    osos_player_unlock(player);
+    /* An empty queue still shows one explanatory row. */
+    return count ? count : 1;
+}
+
+static const char *row_text(uint32_t index)
 {
     struct osos_player *player = osos_player_get();
     line.size = 0;
     line.data[0] = 0;
     osos_player_lock(player);
-    unsigned filled = fill_rows(player);
-    osos_player_unlock(player);
-
-    if (!filled) {
+    if (index < upcoming(player)) {
+        /* Playback indexes are in play order, so shuffle and Play Next are reflected. */
+        struct osos_media_entry *entry =
+            osos_playback_entry(&player->playback, player->current_index + 1 + index);
+        struct osos_media_item item;
+        if (entry && entry->song.record) {
+            osos_media_item_init_record(&item, entry->song.record);
+            if (osos_media_item_valid(&item)) {
+                decimal(index + 1);
+                append(". ");
+                text_field(&item, OSOS_MEDIA_TITLE);
+                append(" - ");
+                text_field(&item, OSOS_MEDIA_ARTIST);
+            }
+        }
+    } else if (index == 0) {
         append("Nothing queued");
-        set_row(filled++);
     }
-    /* Rows have a fixed count; blank the ones past the end of the queue. */
-    while (filled < ROWS)
-        set_row(filled++);
+    osos_player_unlock(player);
+    return line.data;
+}
 
+int cfw_up_next_property(uint32_t type, uint32_t property, uintptr_t *out)
+{
+    if (property != CFW_UpNext_Property)
+        return 0;
+    if (type == OSOS_PROPERTY_COUNT)
+        *out = row_count();
+    else if (type == OSOS_PROPERTY_STRING)
+        *out = (uintptr_t)row_text(0);
+    else
+        return 0;
+    return 1;
+}
+
+int cfw_up_next_indexed_property(uint32_t type, uint32_t property, uint32_t index,
+                                 uintptr_t *out)
+{
+    if (property != CFW_UpNext_Property)
+        return 0;
+    if (type == OSOS_PROPERTY_STRING)
+        *out = (uintptr_t)row_text(index);
+    else if (type == OSOS_RESOURCE_BMAP)
+        *out = 0; /* No checkmark. */
+    else
+        return 0;
+    return 1;
+}
+
+void cfw_up_next_show(void *controller)
+{
     void *screen =
         osos_create_screen_controller(osos_controller_registry(), CFW_UpNext_Screen,
                                       CFW_UpNext_Layout, 2); /* foregroundpush */
