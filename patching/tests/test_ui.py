@@ -521,7 +521,7 @@ class UiTests(unittest.TestCase):
         self.assertIn("#define CFW_SongInfo_Screen ", header)
         self.assertIn("#define CFW_SongInfo_Layout ", header)
 
-    def test_up_next_list_is_one_dynamic_row_without_chosen_actions(self):
+    def test_up_next_list_is_one_dynamic_row_with_remove_action(self):
         root = Path(__file__).resolve().parents[2]
         metadata = json.loads((root / "firmware/ui.json").read_text())
         shim = root / "payload/native"
@@ -530,7 +530,9 @@ class UiTests(unittest.TestCase):
         document = parser.read(root / "payload/up_next.ui")
         compiled = compile_document(resources, document)
         screen = compiled.string_ids["CFW_UpNext_Screen"]
-        self.assertEqual(word(resources.added["CEVT", screen], 0), 0)
+        # One chosen event routes row clicks to the remove action.
+        self.assertEqual(word(resources.added["CEVT", screen], 0), 1)
+        self.assertIn(b"CFW_UpNextRemove", bytes(resources.added["CEVT", screen].data))
         rows = [
             row
             for (kind, _), data in resources.added.items()

@@ -118,9 +118,12 @@ class Parser:
             if document.root is not None:
                 raise ValueError("Expected one root menu or page per UI declaration")
             if node.tag in ("toggle", "canvas", "list"):
-                attributes(node, "id title")
+                attributes(node, "id title", "action" if node.tag == "list" else "")
                 document.root = Item(
-                    node.tag, self.identifier(node), node.attrib["title"]
+                    node.tag,
+                    self.identifier(node),
+                    node.attrib["title"],
+                    action=node.get("action", ""),
                 )
             else:
                 document.root = (

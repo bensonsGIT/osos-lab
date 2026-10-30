@@ -2,6 +2,7 @@
 
 #include "up_next.h"
 
+#include "cfw.h"
 #include "up_next_ui.h"
 
 /* Rows are rendered on demand, so one line is formatted at a time. */
@@ -126,6 +127,79 @@ int cfw_up_next_indexed_property(uint32_t type, uint32_t property, uint32_t inde
         *out = 0; /* No checkmark. */
     else
         return 0;
+    return 1;
+}
+
+/* Undoes MediaList_LinkEntryAfterCursor for a song directly under the list root.
+   The entry stays allocated in the list pool; no native free routine is known. */
+static void unlink_entry(struct osos_media_list *list, struct osos_media_entry *entry)
+{
+    struct osos_media_entry *root = osos_list_root(list);
+    struct osos_media_entry *next = entry->next, *previous = entry->previous;
+    if (previous)
+        previous->next = next;
+    if (next)
+        next->previous = previous;
+    if (root->group.first == entry)
+        root->group.first = next != entry ? next : NULL;
+    if (root->group.last == entry)
+        root->group.last = previous != entry ? previous : NULL;
+    root->tracks--;
+
+    /* Record-backed lookups walk record+0x24 then entry+0x28; drop this entry. */
+    struct osos_media_record *record = entry->song.record;
+    struct osos_media_entry **link = &record->entries;
+    while (*link && *link != entry)
+        link = &(*link)->song.next_record_entry;
+    if (*link)
+        *link = entry->song.next_record_entry;
+
+    entry->parent = entry->next = entry->previous = NULL;
+    entry->song.next_record_entry = NULL;
+}
+
+/* Caller holds the player lock. Only songs after the current one can be removed. */
+static int remove_upcoming(struct osos_player *player, uint32_t index)
+{
+    if (index >= upcoming(player))
+        return 0;
+    struct osos_media_list *list = player->playback.list;
+    struct osos_media_entry *root = osos_list_root(list);
+    struct osos_media_entry *current =
+        osos_playback_entry(&player->playback, player->current_index);
+    struct osos_media_entry *entry =
+        osos_playback_entry(&player->playback, player->current_index + 1 + index);
+    if (!current || !entry || entry == current || entry->parent != root ||
+        !entry->song.record || root->tracks < 2)
+        return 0;
+
+    /* Artwork is indexed by queue position; stop its worker before mutation. */
+    osos_player_stop_artwork(player);
+    osos_database_begin_update(osos_list_database(list));
+    unlink_entry(list, entry);
+    osos_media_list_invalidate_all_orders(list);
+    osos_database_end_update(osos_list_database(list));
+    osos_player_rebuild_artwork(player);
+    /* The removed song may already be prepared as the next track. */
+    osos_player_clear_prepared(player);
+    osos_audio_set_playback_source(player->playback_source);
+    return 1;
+}
+
+int cfw_up_next_action(const char *action, uint32_t argument)
+{
+    if (!cfw_string_equal(action, "CFW_UpNextRemove"))
+        return 0;
+    if (argument != OSOS_ACTION_SUPPORT_QUERY) {
+        uint32_t index = osos_selection_index(osos_ui_selection());
+        struct osos_player *player = osos_player_get();
+        osos_player_lock(player);
+        int removed = remove_upcoming(player, index);
+        osos_player_unlock(player);
+        void *model = osos_ui_service_get(0x8900);
+        if (removed && model)
+            osos_model_notify(model, OSOS_NOTIFY_ALL, CFW_UpNext_Property);
+    }
     return 1;
 }
 

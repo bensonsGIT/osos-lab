@@ -359,6 +359,12 @@ static inline void osos_media_list_invalidate_order(struct osos_media_list *list
     ((fn)OSOS_MEDIA_LIST_INVALIDATE_ORDER)(list, order);
 }
 
+static inline void osos_media_list_invalidate_all_orders(struct osos_media_list *list)
+{
+    typedef void (*fn)(struct osos_media_list *);
+    ((fn)OSOS_MEDIA_LIST_INVALIDATE_ALL_ORDERS)(list);
+}
+
 static inline void osos_database_end_update(void *database)
 {
     typedef void (*fn)(void *);

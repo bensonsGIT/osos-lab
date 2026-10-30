@@ -14,6 +14,7 @@ PATCH_ARM int cfw_settings_action(void *controller, const char *action,
     if (cfw_ui_handle_action(action, argument) ||
         cfw_clicker_action(controller, action, argument) ||
         cfw_dark_mode_action(controller, action, argument) ||
+        cfw_up_next_action(action, argument) ||
         cfw_eq_action(action, argument))
         return 1;
 

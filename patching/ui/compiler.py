@@ -229,10 +229,23 @@ class DocumentCompiler:
         property_id = resources.allocate(item.name + "_Property")
         kind, prototype = blocks(resources.stock("ITEM", "Settings_EQ_Items"))[0]
         row = Resource(prototype)
-        put(row, 0x30, resources.allocate())
+        row_id = resources.allocate()
+        put(row, 0x30, row_id)
         put(row, 0x68, resources.property_source(0x8900, property_id))
         row[0x94:0x95] = b"\x01"
-        self.page(item.name, item.title, [(kind, row)], [])
+        events = []
+        if item.action:
+            # Stay on the list; the action handler refreshes the row count.
+            events.append(
+                menu_event(
+                    row_id,
+                    "chosen",
+                    item.action,
+                    "navigator.SwitchLayout",
+                    [item.name + "_Layout"],
+                )
+            )
+        self.page(item.name, item.title, [(kind, row)], events)
         self.string_ids[item.name + "_Property"] = property_id
 
     def range_page(self, item, property_id):

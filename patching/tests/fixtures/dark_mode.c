@@ -339,6 +339,13 @@ int cfw_ui_indexed_property(uint32_t type, uint32_t property, uint32_t index,
     return 0;
 }
 
+int cfw_up_next_action(const char *action, uint32_t argument)
+{
+    (void)action;
+    (void)argument;
+    return 0;
+}
+
 int cfw_up_next_property(uint32_t type, uint32_t property, uintptr_t *out)
 {
     (void)type;

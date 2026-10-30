@@ -22,6 +22,7 @@ class Item:
     default_index: int = 0
     text_file: str = ""
     hide_when_zero: bool = False
+    action: str = ""
     items: list["Item"] = field(default_factory=list)
 
 

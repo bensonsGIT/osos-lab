@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <ui>
-  <!-- Read-only view of the songs after the current one in the Now Playing list. -->
-  <list id="CFW_UpNext" title="Up Next"/>
+  <!-- Songs after the current one in the Now Playing list; choosing a row removes it. -->
+  <list id="CFW_UpNext" title="Up Next" action="CFW_UpNextRemove"/>
   <string id="CFW_UP_NEXT_LABEL" text="Up Next"/>
   <screen-event screen="NowPlaying_Screen" event="contextualMenu.CFW_UpNext" handler="CFW_UpNext"/>
 </ui>
