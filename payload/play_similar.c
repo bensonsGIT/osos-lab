@@ -49,13 +49,57 @@ static void offer(struct pool *pool, struct osos_media_record *record)
     }
 }
 
-static int genre_equal(struct osos_media_item *item, const char *genre)
+static int separator(char c)
+{
+    return c == ';' || c == '/' || c == ',';
+}
+
+/* Reads the next separator-delimited genre, trimmed of spaces, and advances *text. */
+static unsigned next_genre(const char **text, const char **start)
+{
+    const char *s = *text;
+    while (*s == ' ')
+        s++;
+    *start = s;
+    while (*s && !separator(*s))
+        s++;
+    const char *end = s;
+    while (end > *start && end[-1] == ' ')
+        end--;
+    *text = *s ? s + 1 : s;
+    return end - *start;
+}
+
+static char lower(char c)
+{
+    return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+/* True when the two tags share any genre, ignoring ASCII case. */
+static int genres_overlap(const char *a, const char *b)
+{
+    while (*a) {
+        const char *x;
+        unsigned x_length = next_genre(&a, &x);
+        for (const char *rest = b; x_length && *rest;) {
+            const char *y;
+            unsigned i = 0, y_length = next_genre(&rest, &y);
+            while (i < x_length && i < y_length && lower(x[i]) == lower(y[i]))
+                i++;
+            if (i == x_length && i == y_length)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int genre_match(struct osos_media_item *item, const char *genre)
 {
     struct osos_native_string string;
     osos_native_string_init(&string);
     osos_media_item_text(item, OSOS_MEDIA_GENRE, &string);
     const char *text = osos_native_string_data(&string);
-    int equal = text && *text && cfw_string_equal(text, genre);
+    int equal = text && genres_overlap(text, genre);
     osos_native_string_destroy(&string);
     return equal;
 }
@@ -110,7 +154,7 @@ static void scan(struct osos_media_record *seed, const char *genre, uint16_t yea
             continue;
         struct osos_media_item item;
         osos_media_item_init_record(&item, record);
-        if (!osos_media_item_valid(&item) || !genre_equal(&item, genre))
+        if (!osos_media_item_valid(&item) || !genre_match(&item, genre))
             continue;
         uint16_t other = osos_media_item_year(&item);
         int near_year = year && other && (other > year ? other - year : year - other) <=
