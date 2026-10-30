@@ -76,33 +76,68 @@ static char lower(char c)
     return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
 }
 
-/* True when the two tags share any genre, ignoring ASCII case. */
-static int genres_overlap(const char *a, const char *b)
+/* True when the separator-joined list holds genre x of n chars, ignoring ASCII case. */
+static int has_genre(const char *list, const char *x, unsigned n)
 {
-    while (*a) {
-        const char *x;
-        unsigned x_length = next_genre(&a, &x);
-        for (const char *rest = b; x_length && *rest;) {
-            const char *y;
-            unsigned i = 0, y_length = next_genre(&rest, &y);
-            while (i < x_length && i < y_length && lower(x[i]) == lower(y[i]))
-                i++;
-            if (i == x_length && i == y_length)
-                return 1;
-        }
+    while (n && *list) {
+        const char *y;
+        unsigned i = 0, length = next_genre(&list, &y);
+        while (i < n && i < length && lower(x[i]) == lower(y[i]))
+            i++;
+        if (i == n && i == length)
+            return 1;
     }
     return 0;
 }
 
-static int genre_match(struct osos_media_item *item, const char *genre)
+/* Every genre tagged on the seed artist's songs, joined with ';'. Tagging often
+   varies across an artist's songs, so this matches more than the seed's own tag. */
+struct profile {
+    char text[192];
+    unsigned length;
+};
+
+static void profile_add(struct profile *profile, const char *tags)
+{
+    while (*tags) {
+        const char *x;
+        unsigned n = next_genre(&tags, &x);
+        if (!n || has_genre(profile->text, x, n) ||
+            profile->length + n + 2 > sizeof(profile->text))
+            continue;
+        if (profile->length)
+            profile->text[profile->length++] = ';';
+        for (unsigned i = 0; i < n; i++)
+            profile->text[profile->length++] = x[i];
+        profile->text[profile->length] = 0;
+    }
+}
+
+static int genres_overlap(const char *tags, const char *profile)
+{
+    while (*tags) {
+        const char *x;
+        unsigned n = next_genre(&tags, &x);
+        if (has_genre(profile, x, n))
+            return 1;
+    }
+    return 0;
+}
+
+/* Adds the item's genres to the profile, or reports whether it shares one with it. */
+static int genre_step(struct osos_media_item *item, struct profile *profile, int add)
 {
     struct osos_native_string string;
     osos_native_string_init(&string);
     osos_media_item_text(item, OSOS_MEDIA_GENRE, &string);
     const char *text = osos_native_string_data(&string);
-    int equal = text && genres_overlap(text, genre);
+    int match = 0;
+    if (text && add)
+        profile_add(profile, text);
+    else if (text)
+        match = genres_overlap(text, profile->text);
     osos_native_string_destroy(&string);
-    return equal;
+    return match;
 }
 
 static uint32_t artist_token(struct osos_media_record *record)
@@ -117,9 +152,19 @@ static int same_artist(struct osos_media_record *a, struct osos_media_record *b)
            (album_artist && album_artist == cfw_album_artist_token(b));
 }
 
-/* Walks every music track through a temporary library browser, as Album Artists does. */
-static void scan(struct osos_media_record *seed, const char *genre, uint16_t year,
-                 struct pool *artist, struct pool *near, struct pool *genre_pool)
+static struct osos_media_record *track(void *browser, struct osos_media_list *list,
+                                       uint32_t index)
+{
+    struct osos_media_entry *entry = osos_list_order_entry(list, 6, 0, index);
+    struct osos_media_record *record = entry ? entry->song.record : NULL;
+    return record && osos_browser_filter(browser, entry, NULL) ? record : NULL;
+}
+
+enum { ARTIST, NEAR, GENRE, ERA, POOLS };
+
+/* Walks every music track through a temporary library browser, as Album Artists does:
+   first to build the artist's genre profile, then to sort candidates into pools. */
+static void scan(struct osos_media_item *seed, struct pool *pools)
 {
     void **registry = (void **)OSOS_BROWSER_REGISTRY;
     unsigned available = 0;
@@ -142,25 +187,40 @@ static void scan(struct osos_media_record *seed, const char *genre, uint16_t yea
 
     struct osos_media_list *list = osos_browser_current_list(browser);
     uint32_t count = list && osos_list_root(list) ? osos_list_root(list)->tracks : 0;
+    struct profile profile;
+    profile.length = 0;
+    profile.text[0] = 0;
+    genre_step(seed, &profile, 1);
     for (uint32_t i = 0; i < count; i++) {
-        struct osos_media_entry *entry = osos_list_order_entry(list, 6, 0, i);
-        struct osos_media_record *record = entry ? entry->song.record : NULL;
-        if (!record || record == seed || !osos_browser_filter(browser, entry, NULL))
+        struct osos_media_record *record = track(browser, list, i);
+        if (record && record != seed->record && same_artist(seed->record, record)) {
+            struct osos_media_item item;
+            osos_media_item_init_record(&item, record);
+            if (osos_media_item_valid(&item))
+                genre_step(&item, &profile, 1);
+        }
+    }
+
+    uint16_t year = osos_media_item_year(seed);
+    for (uint32_t i = 0; i < count; i++) {
+        struct osos_media_record *record = track(browser, list, i);
+        if (!record || record == seed->record)
             continue;
-        if (same_artist(seed, record)) {
-            offer(artist, record);
+        if (same_artist(seed->record, record)) {
+            offer(&pools[ARTIST], record);
             continue;
         }
-        if (!*genre)
-            continue;
         struct osos_media_item item;
         osos_media_item_init_record(&item, record);
-        if (!osos_media_item_valid(&item) || !genre_match(&item, genre))
+        if (!osos_media_item_valid(&item))
             continue;
         uint16_t other = osos_media_item_year(&item);
         int near_year = year && other && (other > year ? other - year : year - other) <=
                                              NEAR_YEARS;
-        offer(near_year ? near : genre_pool, record);
+        if (profile.length && genre_step(&item, &profile, 0))
+            offer(&pools[near_year ? NEAR : GENRE], record);
+        else if (near_year)
+            offer(&pools[ERA], record);
     }
     osos_model_ref_release(&reference);
 }
@@ -172,32 +232,18 @@ void cfw_play_similar(struct osos_media_item *seed)
     if (!random_state)
         random_state = ((uint32_t(*)(void))OSOS_CRYPTO_RANDOM_NEXT_WORD)() | 1;
 
-    char genre[64];
-    unsigned length = 0;
-    struct osos_native_string string;
-    osos_native_string_init(&string);
-    osos_media_item_text(seed, OSOS_MEDIA_GENRE, &string);
-    const char *text = osos_native_string_data(&string);
-    while (text && text[length] && length < sizeof(genre) - 1) {
-        genre[length] = text[length];
-        length++;
-    }
-    genre[length] = 0;
-    osos_native_string_destroy(&string);
+    struct pool pools[POOLS];
+    for (unsigned p = 0; p < POOLS; p++)
+        pool_init(&pools[p], p == ARTIST ? ARTIST_PICKS : PICKS);
+    scan(seed, pools);
 
-    struct pool artist, near, genre_pool;
-    pool_init(&artist, ARTIST_PICKS);
-    pool_init(&near, PICKS);
-    pool_init(&genre_pool, PICKS);
-    scan(seed->record, genre, osos_media_item_year(seed), &artist, &near, &genre_pool);
-
-    /* Artist matches first, then same genre and era, then the rest of the genre. */
+    /* Artist matches first, then shared genre and era, the rest of the shared genres,
+       and finally any genre from the same era to fill niche-genre mixes. */
     struct osos_media_record *picks[PICKS];
     unsigned n = 0;
-    struct pool *pools[] = {&artist, &near, &genre_pool};
-    for (unsigned p = 0; p < 3; p++)
-        for (unsigned i = 0; i < pools[p]->count && n < PICKS; i++)
-            picks[n++] = pools[p]->records[i];
+    for (unsigned p = 0; p < POOLS; p++)
+        for (unsigned i = 0; i < pools[p].count && n < PICKS; i++)
+            picks[n++] = pools[p].records[i];
     for (unsigned i = n; i > 1; i--) {
         unsigned j = next_random() % i;
         struct osos_media_record *swap = picks[i - 1];
