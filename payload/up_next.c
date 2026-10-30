@@ -105,8 +105,9 @@ static const char *row_text(uint32_t index)
     return line.data;
 }
 
-static const char *const song_actions[] = {"Play Now", "Move Up", "Move Down", "Remove"};
-enum { PLAY_NOW, MOVE_UP, MOVE_DOWN, REMOVE, SONG_ACTIONS };
+static const char *const song_actions[] = {"Play Now",  "Play Next", "Move Up",
+                                            "Move Down", "Remove"};
+enum { PLAY_NOW, PLAY_NEXT, MOVE_UP, MOVE_DOWN, REMOVE, SONG_ACTIONS };
 
 /* Upcoming-song index of the Queue row that opened the song actions. */
 static uint32_t selected;
@@ -378,7 +379,9 @@ int cfw_up_next_action(const char *action, uint32_t argument)
         /* Advance outside the player lock; the native call takes it itself. */
         if (edit(bring_next, selected, 0))
             osos_player_advance_track(osos_player_get(), 0);
-    } else if (index == REMOVE)
+    } else if (index == PLAY_NEXT)
+        edit(bring_next, selected, 0);
+    else if (index == REMOVE)
         edit(remove_upcoming, selected, 1);
     else if (index < SONG_ACTIONS)
         edit(move_upcoming, selected, index == MOVE_UP);

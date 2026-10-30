@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <ui>
-  <!-- Actions for the Queue row chosen last; rows are Play Now, Move Up, Move Down and Remove. -->
+  <!-- Actions for the Queue row chosen last; rows are Play Now, Play Next, Move Up, Move Down and Remove. -->
   <list id="CFW_QueueSong" title="Song" action="CFW_QueueSongAction" close="true"/>
 </ui>
