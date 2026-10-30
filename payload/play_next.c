@@ -62,13 +62,18 @@ static struct osos_media_entry *current_entry(struct osos_player *player)
     return current;
 }
 
-void cfw_play_next_menu(struct osos_context_menu *menu)
+int cfw_play_next_available(void)
 {
     struct osos_player *player = osos_player_get();
     osos_player_lock(player);
     int available = current_entry(player) != NULL;
     osos_player_unlock(player);
-    if (available) {
+    return available;
+}
+
+void cfw_play_next_menu(struct osos_context_menu *menu)
+{
+    if (cfw_play_next_available()) {
         osos_context_menu_append(menu, CFW_PLAY_NEXT, "CFW_PlayNext", 1);
         osos_context_menu_append(menu, CFW_PLAY_LAST, "CFW_PlayLast", 1);
     }

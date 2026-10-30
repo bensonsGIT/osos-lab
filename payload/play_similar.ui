@@ -1,0 +1,9 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<ui>
+  <string id="CFW_PLAY_SIMILAR_LABEL" text="Play Similar"/>
+  <screen-event screen="MediaLists_Songs_Screen" event="contextualMenu.CFW_PlaySimilar" handler="CFW_PlaySimilar"/>
+  <screen-event screen="MediaLists_NestedPlaylists_Screen" event="contextualMenu.CFW_PlaySimilar" handler="CFW_PlaySimilar"/>
+  <screen-event screen="MediaLists_Genius_Screen" event="contextualMenu.CFW_PlaySimilar" handler="CFW_PlaySimilar"/>
+  <screen-event screen="MediaLists_GeniusPlaylist_Screen" event="contextualMenu.CFW_PlaySimilar" handler="CFW_PlaySimilar"/>
+  <screen-event screen="NowPlaying_Screen" event="contextualMenu.CFW_PlaySimilar" handler="CFW_PlaySimilar"/>
+</ui>

@@ -3,6 +3,8 @@
 #include "cfw.h"
 #include "patch.h"
 #include "play_next.h"
+#include "play_similar.h"
+#include "play_similar_ui.h"
 #include "song_info.h"
 #include "song_info_ui.h"
 #include "up_next.h"
@@ -52,22 +54,27 @@ static int song_action(void *controller, enum song_source source, const char *ac
                        uint32_t argument)
 {
     int info = cfw_string_equal(action, "CFW_SongInfo");
+    int similar = cfw_string_equal(action, "CFW_PlaySimilar");
     int last = cfw_string_equal(action, "CFW_PlayLast");
-    if (!info &&
+    int queue = !info && !similar;
+    if (queue &&
         (source == NOW_PLAYING || (!last && !cfw_string_equal(action, "CFW_PlayNext"))))
         return 0;
     if (argument != OSOS_ACTION_SUPPORT_QUERY) {
         struct osos_player *player = osos_player_get();
-        if (!info)
+        /* Play Similar scans the library first and takes the lock itself. */
+        if (queue)
             osos_player_lock(player);
         struct osos_media_item item;
         struct osos_media_item *selected =
             selected_item(controller, source, &item) ? &item : NULL;
         if (info)
             cfw_song_info_show(controller, selected);
+        else if (similar)
+            cfw_play_similar(selected);
         else
             cfw_play_next_add(player, selected, last);
-        if (!info)
+        if (queue)
             osos_player_unlock(player);
     }
     return 1;
@@ -77,6 +84,8 @@ PATCH_ARM void cfw_song_menu_cancel(struct osos_context_menu *menu, uint32_t lab
                                     const char *action, uint32_t flags)
 {
     cfw_play_next_menu(menu);
+    if (cfw_play_next_available())
+        osos_context_menu_append(menu, CFW_PLAY_SIMILAR_LABEL, "CFW_PlaySimilar", 1);
     osos_context_menu_append(menu, CFW_SONG_INFO_LABEL, "CFW_SongInfo", 1);
     osos_context_menu_append(menu, label, action, flags);
 }
@@ -110,6 +119,8 @@ PATCH_ARM void cfw_now_playing_menu_cancel(struct osos_context_menu *menu,
     osos_context_menu_append(menu, CFW_UP_NEXT_LABEL, "CFW_UpNext", 1);
     if (cfw_up_next_has_songs())
         osos_context_menu_append(menu, CFW_CLEAR_QUEUE_LABEL, "CFW_ClearQueue", 1);
+    if (cfw_play_next_available())
+        osos_context_menu_append(menu, CFW_PLAY_SIMILAR_LABEL, "CFW_PlaySimilar", 1);
     osos_context_menu_append(menu, CFW_SONG_INFO_LABEL, "CFW_SongInfo", 1);
     osos_context_menu_append(menu, label, action, flags);
 }
