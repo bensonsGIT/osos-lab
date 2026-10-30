@@ -66,6 +66,7 @@ def build_recipe(
                 "custom_eq.ui",
                 "play_next.ui",
                 "song_info.ui",
+                "up_next.ui",
                 "album_artists.ui",
                 "dark_mode.ui",
                 "queue_selection.ui",

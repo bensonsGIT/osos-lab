@@ -5,6 +5,8 @@
 #include "play_next.h"
 #include "song_info.h"
 #include "song_info_ui.h"
+#include "up_next.h"
+#include "up_next_ui.h"
 
 int cfw_song_action_original(void *, const char *, uint32_t);
 int cfw_playlist_action_original(void *, const char *, uint32_t);
@@ -105,6 +107,7 @@ PATCH_ARM void cfw_now_playing_menu_cancel(struct osos_context_menu *menu,
                                            uint32_t label, const char *action,
                                            uint32_t flags)
 {
+    osos_context_menu_append(menu, CFW_UP_NEXT_LABEL, "CFW_UpNext", 1);
     osos_context_menu_append(menu, CFW_SONG_INFO_LABEL, "CFW_SongInfo", 1);
     osos_context_menu_append(menu, label, action, flags);
 }
@@ -112,6 +115,11 @@ PATCH_ARM void cfw_now_playing_menu_cancel(struct osos_context_menu *menu,
 PATCH_ARM int cfw_now_playing_action(void *controller, const char *action,
                                      uint32_t argument)
 {
+    if (cfw_string_equal(action, "CFW_UpNext")) {
+        if (argument != OSOS_ACTION_SUPPORT_QUERY)
+            cfw_up_next_show(controller);
+        return 1;
+    }
     if (song_action(controller, NOW_PLAYING, action, argument))
         return 1;
     return osos_now_playing_action(controller, action, argument);

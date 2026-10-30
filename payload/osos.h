@@ -427,6 +427,15 @@ static inline void osos_media_item_init(struct osos_media_item *item)
     ((fn)OSOS_MEDIA_ITEM_INIT)(item, NULL, 0);
 }
 
+/* Builds a record-backed item; osos_media_item_entry() resolves its list entry. */
+static inline void osos_media_item_init_record(struct osos_media_item *item,
+                                               struct osos_media_record *record)
+{
+    typedef struct osos_media_item *(*fn)(struct osos_media_item *,
+                                          struct osos_media_record *, uint8_t);
+    ((fn)OSOS_MEDIA_ITEM_INIT)(item, record, 0);
+}
+
 static inline void osos_genius_get_item(void *genius, int row,
                                         struct osos_media_item *item)
 {
