@@ -118,12 +118,21 @@ class Parser:
             if document.root is not None:
                 raise ValueError("Expected one root menu or page per UI declaration")
             if node.tag in ("toggle", "canvas", "list"):
-                attributes(node, "id title", "action" if node.tag == "list" else "")
+                attributes(
+                    node, "id title", "action opens close" if node.tag == "list" else ""
+                )
+                close = node.get("close", "false")
+                if close not in ("true", "false") or (
+                    close == "true" and node.get("opens")
+                ):
+                    raise ValueError(f"Invalid navigation on <{node.tag}>")
                 document.root = Item(
                     node.tag,
                     self.identifier(node),
                     node.attrib["title"],
                     action=node.get("action", ""),
+                    opens=node.get("opens", ""),
+                    close=close == "true",
                 )
             else:
                 document.root = (

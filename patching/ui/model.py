@@ -23,6 +23,8 @@ class Item:
     text_file: str = ""
     hide_when_zero: bool = False
     action: str = ""
+    opens: str = ""
+    close: bool = False
     items: list["Item"] = field(default_factory=list)
 
 

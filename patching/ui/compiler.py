@@ -234,7 +234,13 @@ class DocumentCompiler:
         put(row, 0x68, resources.property_source(0x8900, property_id))
         row[0x94:0x95] = b"\x01"
         events = []
-        if item.action:
+        if item.opens:
+            events.append(self.push(row_id, item.opens, item.action))
+        elif item.close:
+            events.append(
+                menu_event(row_id, "chosen", item.action, "navigator.PopTopScreen", [])
+            )
+        elif item.action:
             # Stay on the list; the action handler refreshes the row count.
             events.append(
                 menu_event(

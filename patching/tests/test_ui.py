@@ -521,7 +521,7 @@ class UiTests(unittest.TestCase):
         self.assertIn("#define CFW_SongInfo_Screen ", header)
         self.assertIn("#define CFW_SongInfo_Layout ", header)
 
-    def test_up_next_list_is_one_dynamic_row_with_remove_action(self):
+    def test_up_next_list_opens_song_actions(self):
         root = Path(__file__).resolve().parents[2]
         metadata = json.loads((root / "firmware/ui.json").read_text())
         shim = root / "payload/native"
@@ -530,9 +530,11 @@ class UiTests(unittest.TestCase):
         document = parser.read(root / "payload/up_next.ui")
         compiled = compile_document(resources, document)
         screen = compiled.string_ids["CFW_UpNext_Screen"]
-        # One chosen event routes row clicks to the remove action.
+        # One chosen event records the row and opens its song actions.
+        events = bytes(resources.added["CEVT", screen].data)
         self.assertEqual(word(resources.added["CEVT", screen], 0), 1)
-        self.assertIn(b"CFW_UpNextRemove", bytes(resources.added["CEVT", screen].data))
+        self.assertIn(b"CFW_UpNextSelect", events)
+        self.assertIn(b"CFW_QueueSong_Screen", events)
         rows = [
             row
             for (kind, _), data in resources.added.items()
@@ -543,6 +545,12 @@ class UiTests(unittest.TestCase):
         self.assertEqual(rows[0].data[0x94], 1)
         header = emit_header(document, compiled.string_ids)
         self.assertIn("#define CFW_UpNext_Property ", header)
+
+    def test_list_navigation_must_be_single_choice(self):
+        with self.assertRaises(ValueError):
+            parser.parse(
+                '<ui><list id="A" title="A" action="X" opens="B" close="true"/></ui>'
+            )
 
     def test_named_screen_uses_selected_binding_and_rejects_missing_names(self):
         document = parser.parse(
