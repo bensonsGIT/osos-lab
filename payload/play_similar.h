@@ -5,8 +5,8 @@
 
 #include "osos.h"
 
-/* Queues songs related to seed after the current one. Takes the player lock itself;
-   the library scan runs before it is taken. */
+/* Replaces the songs after the current one with songs related to seed. Takes the
+   player lock itself; the library scan runs before it is taken. */
 void cfw_play_similar(struct osos_media_item *seed);
 
 #endif

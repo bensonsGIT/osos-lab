@@ -5,6 +5,7 @@
 #include "album_artist.h"
 #include "cfw.h"
 #include "play_next.h"
+#include "up_next.h"
 
 #define FIELD(type, object, offset) (*(type *)((uint8_t *)(object) + (offset)))
 
@@ -204,6 +205,10 @@ void cfw_play_similar(struct osos_media_item *seed)
         picks[j] = swap;
     }
 
+    if (!n)
+        return;
+    /* The queue becomes the current song followed only by the picks. */
+    cfw_up_next_clear();
     struct osos_player *player = osos_player_get();
     osos_player_lock(player);
     /* Play Next inserts directly after the current song, so add in reverse. */
