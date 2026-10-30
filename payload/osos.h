@@ -243,6 +243,7 @@ _Static_assert(offsetof(struct osos_media_entry, tracks) == 0x2e, "Entry layout"
 _Static_assert(offsetof(struct osos_media_entry, song.shuffle_rank) == 0x24,
                "Shuffle rank layout");
 _Static_assert(offsetof(struct osos_media_order, entries) == 0x10, "Order layout");
+_Static_assert(offsetof(struct osos_player, current_index) == 0x5c, "Player index");
 _Static_assert(offsetof(struct osos_player, playback) == 0x60, "Player layout");
 _Static_assert(offsetof(struct osos_player, playback_source) == 0x948,
                "Playback source layout");

@@ -346,44 +346,47 @@ static unsigned bring_next(struct osos_player *player, uint32_t index, unsigned 
     return 1;
 }
 
-/* Caller holds the player lock. Removes every song after the current one by walking
-   links and shuffle ranks from the current entry, not play-order positions. */
-static unsigned clear_upcoming(struct osos_player *player, uint32_t unused_index,
-                               unsigned unused)
+/* Caller holds the player lock. Returns the playback list's root when it is a flat
+   list of songs, refreshing its play order first. */
+static struct osos_media_entry *queue_root(struct osos_player *player)
+{
+    upcoming(player);
+    if (!player->current || !osos_playback_list_valid(&player->playback))
+        return NULL;
+    struct osos_media_entry *root = osos_list_root(player->playback.list);
+    return root->groups ? NULL : root;
+}
+
+/* Caller holds the player lock. Leaves only the current song, removing the songs
+   before it too. Walks links rather than play-order positions. */
+static unsigned clear_others(struct osos_player *player, uint32_t unused_index,
+                             unsigned unused)
 {
     (void)unused_index;
     (void)unused;
-    if (!upcoming(player))
+    struct osos_media_entry *root = queue_root(player);
+    if (!root || root->tracks < 2)
         return 0;
     struct osos_media_list *list = player->playback.list;
-    struct osos_media_entry *root = osos_list_root(list);
     struct osos_media_entry *current =
         osos_playback_entry(&player->playback, player->current_index);
     if (!current || current->parent != root)
         return 0;
-    int reverse = osos_list_is_reversed(list), shuffled = osos_list_is_shuffled(list);
-    uint32_t rank = current->song.shuffle_rank;
     unsigned removed = 0, limit = root->tracks;
 
     osos_player_stop_artwork(player);
     osos_database_begin_update(osos_list_database(list));
-    /* Unshuffled play follows links, so upcoming songs are the current song's
-       successors (predecessors when reversed); shuffled play sorts by rank. */
-    struct osos_media_entry *entry =
-        shuffled ? root->group.first : reverse ? current->previous : current->next;
-    while (entry && limit--) {
-        struct osos_media_entry *next = shuffled || !reverse ? entry->next : entry->previous;
-        uint32_t other = entry->song.shuffle_rank;
-        if (entry == current) {
-            /* Unshuffled walks only meet the current song again on a circular list. */
-            if (!shuffled)
-                break;
-        } else if (!shuffled || (reverse ? other < rank : other > rank)) {
+    for (struct osos_media_entry *entry = root->group.first; entry && limit--;) {
+        struct osos_media_entry *next = entry->next;
+        if (entry != current) {
             unlink_entry(list, entry);
             removed++;
         }
         entry = next;
     }
+    /* The current song is now the only one; the player keeps its position at +0x5c,
+       as MediaPlayer_SetPlaybackOrder updates it after reordering. */
+    player->current_index = 0;
     osos_media_list_invalidate_all_orders(list);
     cfw_play_order_refresh(player);
     osos_database_end_update(osos_list_database(list));
@@ -412,14 +415,15 @@ int cfw_up_next_has_songs(void)
 {
     struct osos_player *player = osos_player_get();
     osos_player_lock(player);
-    int any = upcoming(player) != 0;
+    struct osos_media_entry *root = queue_root(player);
+    int any = root && root->tracks > 1;
     osos_player_unlock(player);
     return any;
 }
 
 void cfw_up_next_clear(void)
 {
-    edit(clear_upcoming, 0, 0);
+    edit(clear_others, 0, 0);
 }
 
 int cfw_up_next_action(const char *action, uint32_t argument)
