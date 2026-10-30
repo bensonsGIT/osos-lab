@@ -7,7 +7,8 @@
    lookups return NULL until the shuffle index is rebuilt. */
 void cfw_play_order_refresh(struct osos_player *player);
 int cfw_play_next_available(void);
-void cfw_play_next_menu(struct osos_context_menu *menu);
+/* Returns whether something is playing, so queue actions were added. */
+int cfw_play_next_menu(struct osos_context_menu *menu);
 /* Caller holds the player lock while resolving the item and inserting it. */
 void cfw_play_next_add(struct osos_player *player, struct osos_media_item *item,
                        int last);

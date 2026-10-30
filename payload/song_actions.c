@@ -83,8 +83,7 @@ static int song_action(void *controller, enum song_source source, const char *ac
 PATCH_ARM void cfw_song_menu_cancel(struct osos_context_menu *menu, uint32_t label,
                                     const char *action, uint32_t flags)
 {
-    cfw_play_next_menu(menu);
-    if (cfw_play_next_available())
+    if (cfw_play_next_menu(menu))
         osos_context_menu_append(menu, CFW_PLAY_SIMILAR_LABEL, "CFW_PlaySimilar", 1);
     osos_context_menu_append(menu, CFW_SONG_INFO_LABEL, "CFW_SongInfo", 1);
     osos_context_menu_append(menu, label, action, flags);
@@ -117,7 +116,7 @@ PATCH_ARM void cfw_now_playing_menu_cancel(struct osos_context_menu *menu,
                                            uint32_t flags)
 {
     osos_context_menu_append(menu, CFW_UP_NEXT_LABEL, "CFW_UpNext", 1);
-    if (cfw_up_next_has_songs())
+    if (cfw_up_next_can_clear())
         osos_context_menu_append(menu, CFW_CLEAR_QUEUE_LABEL, "CFW_ClearQueue", 1);
     if (cfw_play_next_available())
         osos_context_menu_append(menu, CFW_PLAY_SIMILAR_LABEL, "CFW_PlaySimilar", 1);

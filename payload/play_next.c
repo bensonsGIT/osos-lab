@@ -81,12 +81,14 @@ int cfw_play_next_available(void)
     return available;
 }
 
-void cfw_play_next_menu(struct osos_context_menu *menu)
+int cfw_play_next_menu(struct osos_context_menu *menu)
 {
-    if (cfw_play_next_available()) {
+    int available = cfw_play_next_available();
+    if (available) {
         osos_context_menu_append(menu, CFW_PLAY_NEXT, "CFW_PlayNext", 1);
         osos_context_menu_append(menu, CFW_PLAY_LAST, "CFW_PlayLast", 1);
     }
+    return available;
 }
 
 void cfw_play_next_add(struct osos_player *player, struct osos_media_item *selected,

@@ -244,6 +244,8 @@ void cfw_play_similar(struct osos_media_item *seed)
     for (unsigned p = 0; p < POOLS; p++)
         for (unsigned i = 0; i < pools[p].count && n < PICKS; i++)
             picks[n++] = pools[p].records[i];
+    if (!n)
+        return;
     for (unsigned i = n; i > 1; i--) {
         unsigned j = next_random() % i;
         struct osos_media_record *swap = picks[i - 1];
@@ -251,8 +253,6 @@ void cfw_play_similar(struct osos_media_item *seed)
         picks[j] = swap;
     }
 
-    if (!n)
-        return;
     /* The queue becomes the current song followed only by the picks. */
     cfw_up_next_clear();
     struct osos_player *player = osos_player_get();

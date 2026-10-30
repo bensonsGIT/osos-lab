@@ -7,7 +7,9 @@
 
 void cfw_up_next_show(void *controller);
 int cfw_up_next_action(const char *action, uint32_t argument);
-int cfw_up_next_has_songs(void);
+/* Whether the queue holds songs besides the current one. */
+int cfw_up_next_can_clear(void);
+/* Leaves only the current song in the queue. */
 void cfw_up_next_clear(void);
 int cfw_up_next_property(uint32_t type, uint32_t property, uintptr_t *out);
 int cfw_up_next_indexed_property(uint32_t type, uint32_t property, uint32_t index,
