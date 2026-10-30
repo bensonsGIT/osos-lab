@@ -30,6 +30,13 @@ static uint32_t next_random(void)
     return random_state = x;
 }
 
+/* Field-wise so the payload, linked without libc, needs no memset. */
+static void pool_init(struct pool *pool, unsigned capacity)
+{
+    pool->count = pool->seen = 0;
+    pool->capacity = capacity;
+}
+
 static void offer(struct pool *pool, struct osos_media_record *record)
 {
     pool->seen++;
@@ -133,8 +140,10 @@ void cfw_play_similar(struct osos_media_item *seed)
     genre[length] = 0;
     osos_native_string_destroy(&string);
 
-    struct pool artist = {.capacity = ARTIST_PICKS};
-    struct pool near = {.capacity = PICKS}, genre_pool = {.capacity = PICKS};
+    struct pool artist, near, genre_pool;
+    pool_init(&artist, ARTIST_PICKS);
+    pool_init(&near, PICKS);
+    pool_init(&genre_pool, PICKS);
     scan(seed->record, genre, osos_media_item_year(seed), &artist, &near, &genre_pool);
 
     /* Artist matches first, then same genre and era, then the rest of the genre. */
