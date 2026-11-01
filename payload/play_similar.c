@@ -140,6 +140,30 @@ static int genre_step(struct osos_media_item *item, struct profile *profile, int
     return match;
 }
 
+/* vibe-tagger writes "vibe:NN" into Grouping for songs that sound alike. */
+#define VIBE_PREFIX "vibe:"
+#define VIBE_LENGTH 16
+
+/* Copies the item's vibe label into vibe, or leaves it empty when Grouping holds none. */
+static void read_vibe(struct osos_media_item *item, char *vibe)
+{
+    struct osos_native_string string;
+    osos_native_string_init(&string);
+    osos_media_item_text(item, OSOS_MEDIA_GROUPING, &string);
+    const char *text = osos_native_string_data(&string);
+    unsigned length = 0;
+    while (text && text[length] && length < VIBE_LENGTH - 1 &&
+           (length >= sizeof(VIBE_PREFIX) - 1 || text[length] == VIBE_PREFIX[length])) {
+        vibe[length] = text[length];
+        length++;
+    }
+    /* Too short to hold the prefix, or too long to be ours: not a vibe. */
+    if (length < sizeof(VIBE_PREFIX) - 1 || (text && text[length]))
+        length = 0;
+    vibe[length] = 0;
+    osos_native_string_destroy(&string);
+}
+
 static uint32_t artist_token(struct osos_media_record *record)
 {
     return FIELD(uint32_t, record, 0x2c);
@@ -160,7 +184,7 @@ static struct osos_media_record *track(void *browser, struct osos_media_list *li
     return record && osos_browser_filter(browser, entry, NULL) ? record : NULL;
 }
 
-enum { ARTIST, NEAR, GENRE, ERA, POOLS };
+enum { ARTIST, BEST, VIBE, GENRE, ERA, POOLS };
 
 /* Walks every music track through a temporary library browser, as Album Artists does:
    first to build the artist's genre profile, then to sort candidates into pools. */
@@ -202,6 +226,8 @@ static void scan(struct osos_media_item *seed, struct pool *pools)
     }
 
     uint16_t year = osos_media_item_year(seed);
+    char vibe[VIBE_LENGTH], other_vibe[VIBE_LENGTH];
+    read_vibe(seed, vibe);
     for (uint32_t i = 0; i < count; i++) {
         struct osos_media_record *record = track(browser, list, i);
         if (!record || record == seed->record)
@@ -217,8 +243,19 @@ static void scan(struct osos_media_item *seed, struct pool *pools)
         uint16_t other = osos_media_item_year(&item);
         int near_year = year && other && (other > year ? other - year : year - other) <=
                                              NEAR_YEARS;
-        if (profile.length && genre_step(&item, &profile, 0))
-            offer(&pools[near_year ? NEAR : GENRE], record);
+        int genre = profile.length && genre_step(&item, &profile, 0);
+        int same_vibe = 0;
+        if (*vibe) {
+            read_vibe(&item, other_vibe);
+            same_vibe = cfw_string_equal(other_vibe, vibe);
+        }
+        /* With a vibe label, sounding alike stands in for the era match. */
+        if (genre && (*vibe ? same_vibe : near_year))
+            offer(&pools[BEST], record);
+        else if (same_vibe)
+            offer(&pools[VIBE], record);
+        else if (genre)
+            offer(&pools[GENRE], record);
         else if (near_year)
             offer(&pools[ERA], record);
     }
@@ -237,8 +274,9 @@ void cfw_play_similar(struct osos_media_item *seed)
         pool_init(&pools[p], p == ARTIST ? ARTIST_PICKS : PICKS);
     scan(seed, pools);
 
-    /* Artist matches first, then shared genre and era, the rest of the shared genres,
-       and finally any genre from the same era to fill niche-genre mixes. */
+    /* Artist matches first, then a shared genre with the same vibe (or era when
+       songs carry no vibe labels), the same vibe in any genre, the rest of the shared
+       genres, and finally any genre from the same era to fill niche-genre mixes. */
     struct osos_media_record *picks[PICKS];
     unsigned n = 0;
     for (unsigned p = 0; p < POOLS; p++)
