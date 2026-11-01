@@ -11,6 +11,8 @@
 
 #define PICKS 25
 #define ARTIST_PICKS 8
+/* Songs any one artist besides the seed's own may contribute to a mix. */
+#define OTHER_ARTIST_PICKS 3
 #define NEAR_YEARS 5
 
 /* Reservoir sample: every candidate seen has an equal chance of being kept. */
@@ -169,6 +171,33 @@ static uint32_t artist_token(struct osos_media_record *record)
     return FIELD(uint32_t, record, 0x2c);
 }
 
+/* FNV-1a of the title in ASCII lower case, ignoring any "(...)", "[...]" or " - ..."
+   suffix, so remastered, live and alternate-album copies count as the same song. */
+static uint32_t title_key(struct osos_media_record *record)
+{
+    struct osos_media_item item;
+    osos_media_item_init_record(&item, record);
+    struct osos_native_string string;
+    osos_native_string_init(&string);
+    osos_media_item_text(&item, OSOS_MEDIA_TITLE, &string);
+    const char *text = osos_native_string_data(&string);
+    const char *end = text ? text : "";
+    while (*end && *end != '(' && *end != '[' &&
+           !(end[0] == ' ' && end[1] == '-' && end[2] == ' '))
+        end++;
+    while (end > (text ? text : "") && end[-1] == ' ')
+        end--;
+    /* A title that is all suffix, such as "(Intro)", keeps its brackets. */
+    if (text && end == text)
+        while (*end)
+            end++;
+    uint32_t hash = 2166136261u;
+    for (const char *c = text; c && c < end; c++)
+        hash = (hash ^ (uint8_t)lower(*c)) * 16777619u;
+    osos_native_string_destroy(&string);
+    return hash;
+}
+
 static int same_artist(struct osos_media_record *a, struct osos_media_record *b)
 {
     uint32_t artist = artist_token(a), album_artist = cfw_album_artist_token(a);
@@ -271,17 +300,37 @@ void cfw_play_similar(struct osos_media_item *seed)
 
     struct pool pools[POOLS];
     for (unsigned p = 0; p < POOLS; p++)
-        pool_init(&pools[p], p == ARTIST ? ARTIST_PICKS : PICKS);
+        pool_init(&pools[p], PICKS);
     scan(seed, pools);
 
     /* Artist matches first, then a shared genre with the same vibe (or era when
        songs carry no vibe labels), the same vibe in any genre, the rest of the shared
        genres, and finally any genre from the same era to fill niche-genre mixes. */
     struct osos_media_record *picks[PICKS];
+    uint32_t artists[PICKS], titles[PICKS];
+    uint32_t seed_artist = artist_token(seed->record), seed_title = title_key(seed->record);
     unsigned n = 0;
-    for (unsigned p = 0; p < POOLS; p++)
-        for (unsigned i = 0; i < pools[p].count && n < PICKS; i++)
-            picks[n++] = pools[p].records[i];
+    for (unsigned p = 0; p < POOLS; p++) {
+        /* The artist pool keeps spares so skipped duplicates are replaced. */
+        unsigned limit = p == ARTIST ? ARTIST_PICKS : PICKS;
+        for (unsigned i = 0; i < pools[p].count && n < limit; i++) {
+            struct osos_media_record *record = pools[p].records[i];
+            uint32_t artist = artist_token(record), title = title_key(record);
+            /* Skip other copies of the seed or of an earlier pick, and stop any other
+               artist from crowding the mix; later candidates fill the slot. */
+            unsigned same = 0, duplicate = artist == seed_artist && title == seed_title;
+            for (unsigned j = 0; j < n; j++)
+                if (artists[j] == artist) {
+                    same++;
+                    duplicate |= titles[j] == title;
+                }
+            if (duplicate || (p != ARTIST && same >= OTHER_ARTIST_PICKS))
+                continue;
+            artists[n] = artist;
+            titles[n] = title;
+            picks[n++] = record;
+        }
+    }
     if (!n)
         return;
     for (unsigned i = n; i > 1; i--) {
